@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Customer Support Bot</title>
+<title>Voice Pipeline Atelier</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500&family=Manrope:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23C8963E' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z'/><path d='M19 10v2a7 7 0 0 1-14 0v-2'/><line x1='12' y1='19' x2='12' y2='23'/><line x1='8' y1='23' x2='16' y2='23'/></svg>">
+
 <script type="importmap">
 {
   "imports": {
@@ -871,8 +871,8 @@
           <svg class="mic-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
         </div>
         <div class="brand-name">
-          Customer Support
-          <span class="brand-sub">Bot</span>
+          Voice Pipeline
+          <span class="brand-sub">Atelier</span>
         </div>
       </div>
       <button class="new-chat-btn" id="clearBtn" title="New conversation" aria-label="New conversation">
@@ -1001,8 +1001,8 @@
       <button class="topbar-toggle" id="sidebarToggle" title="Toggle sidebar" aria-label="Toggle sidebar">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       </button>
-      <div class="topbar-title">customer-support</div>
-      <span class="topbar-pill">Text - Voice</span>
+      <div class="topbar-title">Voice Pipeline</div>
+      <span class="topbar-pill">Text → Voice</span>
     </header>
 
     <!-- Content -->
@@ -2284,6 +2284,20 @@ async function handleRecordingComplete(){
 
 // === Shared turn: works for both typed and spoken input ===
 async function runTurn(userText){
+  // The welcome greeting is pushed into `history` up front (for LLM
+  // context / persistence) but deliberately isn't drawn as a chat bubble
+  // until now, so the orb landing screen stays visible until the customer
+  // actually says something. On this first real turn, paint any
+  // not-yet-rendered assistant messages (i.e. the greeting) into the
+  // transcript before the new user bubble, so the conversation reads
+  // top-to-bottom in the right order once it moves to chat mode.
+  const hasUserTurnYet = history.some(m => m.role === 'user');
+  if(!hasUserTurnYet){
+    history.forEach(m => {
+      if(m.role === 'assistant') addMessage('assistant', m.content, true);
+    });
+  }
+
   // Build/refresh local customer context before the single LLM request.
   updateCustomerContext(userText);
 
@@ -2722,7 +2736,11 @@ function clearAllThreads(){
 function renderChatFromHistory(){
   stopSpeaking();
   els.chatInner.innerHTML = '';
-  if(!history.length){
+  // A thread that only has the auto-added welcome greeting (no user turns
+  // yet) should still show the orb landing screen, not the chat layout —
+  // so this checks for an actual user message, not just any history.
+  const hasUserTurn = history.some(m => m.role === 'user');
+  if(!hasUserTurn){
     els.chatInner.appendChild(els.emptyState);
     els.emptyState.style.display = '';
     exitChatMode();
@@ -2794,9 +2812,14 @@ function newThread(){
 
 // Posts the welcome message into the currently active (empty) thread.
 // This does NOT call the LLM, so it uses zero HF tokens.
+// It deliberately does NOT call addMessage()/enterChatMode() — that would
+// switch straight to the chat layout and hide the orb landing screen
+// before the customer has done anything. The greeting is kept in
+// `history` (so the LLM still has it as context) and only gets rendered
+// as a chat bubble in runTurn(), right when the user sends their first
+// message and the view is switching to chat mode anyway.
 function startJioSupportForActiveThread(){
   history.push({ role: 'assistant', content: WELCOME_MESSAGE });
-  addMessage('assistant', WELCOME_MESSAGE, true);
   speak(WELCOME_MESSAGE);
   setStatus('Type a message, or click the mic to speak');
   persistActiveThread();
