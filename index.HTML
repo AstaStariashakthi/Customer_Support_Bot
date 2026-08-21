@@ -70,7 +70,6 @@
       </button>
     </nav>
 
-    <!-- Threads Panel (in sidebar) -->
     <div class="settings-panel threads-panel" id="threadsPanel">
       <button class="sidebar-item" id="newThreadBtnPanel" style="border:1px dashed rgba(200,150,62,0.5); margin-bottom:10px;">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -102,21 +101,13 @@
         </label>
         <div class="settings-hint" id="rememberTokenWarning" style="display:none; color:var(--err);">⚠ Stored in this browser's localStorage in plain text. Anyone with access to this device/browser profile can read it. Only enable on a private machine.</div>
       </div>
-      <div class="field">
-        <label for="convLanguage">Conversation Language</label>
-        <select id="convLanguage">
-          <option value="auto" selected>Auto-detect</option>
-          <option value="en">English</option>
-          <option value="hi">Hindi</option>
-          <option value="ta">Tamil</option>
-        </select>
-        <div class="settings-hint">Auto-detect guesses the language from what you type or say. If Tamil or Hindi speech keeps coming back transcribed/answered in English, pick it here to force speech-to-text, replies, and the spoken voice to that language.</div>
-      </div>
+
       <div class="field">
         <label for="sttModel">Speech-to-Text</label>
         <select id="sttModel">
+          <option value="nvidia/nemotron-speech-streaming-en-0.6b">NVIDIA Nemotron 0.6B</option>
           <option value="openai/whisper-large-v3">Whisper large-v3</option>
-          <option value="openai/whisper-large-v3-turbo" selected>Whisper large-v3-turbo</option>
+          <option value="openai/whisper-large-v3-turbo">Whisper large-v3-turbo</option>
           <option value="distil-whisper/distil-large-v3">Distil-Whisper large-v3</option>
           <option value="openai/whisper-medium">Whisper medium</option>
           <option value="Qwen/Qwen2-Audio-7B-Instruct">Qwen2-Audio-7B</option>
@@ -126,6 +117,7 @@
         <label for="llmModel">Language Model</label>
         <select id="llmModel">
           <option value="meta-llama/Llama-3.3-70B-Instruct" selected>Llama 3.3 70B</option>
+                  <option value="Qwen/Qwen3.5-27B">Qwen 3.5 27B</option>
           <option value="meta-llama/Llama-3.1-8B-Instruct">Llama 3.1 8B</option>
           <option value="google/gemma-2-27b-it">Gemma 2 27B</option>
           <option value="google/gemma-2-9b-it">Gemma 2 9B</option>
@@ -137,28 +129,28 @@
       <div class="field">
         <label for="ttsVoice">TTS Voice</label>
         <select id="ttsVoice"><option>Loading…</option></select>
-        <div class="settings-hint">"Auto (match customer's language)" picks the closest-matching installed voice for each reply — Hindi, Tamil, Telugu, Malayalam or Kannada — based on what the customer just said. Falls back to English if no matching voice is installed on this device/browser.</div>
+        <div class="settings-hint">"Auto (match customer's language)" picks the best natural-sounding installed voice for each reply — prioritizing Neural/Natural/Premium voices. Falls back to English if no matching voice is installed. Rate and Pitch are auto-tuned in Auto mode for a native-speaker feel.</div>
+      </div>        <div class="field">
+        <label>Rate</label>
+        <div class="slider-row">
+          <input type="range" id="ttsRate" min="0.5" max="2" step="0.05" value="0.92">
+          <span class="slider-val" id="ttsRateVal">0.9</span>
+        </div>
       </div>
       <div class="field">
-        <label>Rate / Pitch</label>
-        <div style="display:flex; gap:8px;">
-          <div class="slider-row" style="flex:1;">
-            <input type="range" id="ttsRate" min="0.5" max="2" step="0.1" value="1">
-            <span class="slider-val" id="ttsRateVal">1.0</span>
-          </div>
-          <div class="slider-row" style="flex:1;">
-            <input type="range" id="ttsPitch" min="0" max="2" step="0.1" value="1">
-            <span class="slider-val" id="ttsPitchVal">1.0</span>
-          </div>
+        <label>Pitch</label>
+        <div class="slider-row">
+          <input type="range" id="ttsPitch" min="0" max="2" step="0.05" value="1.05">
+          <span class="slider-val" id="ttsPitchVal">1.1</span>
         </div>
       </div>
     </div>
 
     <div class="sidebar-bottom">
       <div class="sidebar-divider"></div>
-      <button class="sidebar-item taupe" id="stopSpeakBtn">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
-        Stop speaking
+      <button class="sidebar-item taupe" id="closeSidebarBtn" title="Close sidebar" aria-label="Close sidebar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        Close sidebar
       </button>
       <button class="sidebar-item taupe" id="navAbout">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
@@ -232,6 +224,13 @@
                     <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
                   </div>
                   <div class="input-status-text" id="inputStatus" role="status" aria-live="polite">Type a message, or click the mic to speak</div>
+                  <label class="bar-language-label" for="barLanguage">Language</label>
+                  <select class="bar-language-select" id="barLanguage" aria-label="Conversation language">
+                    <option value="auto" selected>Auto-detect</option>
+                    <option value="en">English · NVIDIA</option>
+                    <option value="ta">Tamil · Hugging Face</option>
+                    <option value="hi">Hindi · Hugging Face</option>
+                  </select>
                   <span class="status-pill" id="statusPill" aria-hidden="true">⚡ ZUOP</span>
                   <button class="stop-speaking-inline" id="stopSpeakBtnInline" title="Stop speaking" aria-label="Stop speaking">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
