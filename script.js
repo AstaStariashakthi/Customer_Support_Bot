@@ -3,7 +3,6 @@ const els = {
   token: document.getElementById('hfToken'),
   sttModel: document.getElementById('sttModel'),
   llmModel: document.getElementById('llmModel'),
-  convLanguage: document.getElementById('convLanguage'),
   ttsVoice: document.getElementById('ttsVoice'),
   ttsRate: document.getElementById('ttsRate'),
   ttsRateVal: document.getElementById('ttsRateVal'),
@@ -15,7 +14,7 @@ const els = {
   inputStatus: document.getElementById('inputStatus'),
   waveformInline: document.getElementById('waveformInline'),
   clearBtn: document.getElementById('clearBtn'),
-  stopSpeakBtn: document.getElementById('stopSpeakBtn'),
+  closeSidebarBtn: document.getElementById('closeSidebarBtn'),
   textInput: document.getElementById('textInput'),
   sendBtn: document.getElementById('sendBtn'),
   sidebar: document.getElementById('sidebar'),
@@ -37,6 +36,7 @@ const els = {
   chatArea: document.getElementById('chatArea'),
   inputBar: document.getElementById('inputBar'),
   statusPill: document.getElementById('statusPill'),
+  barLanguage: document.getElementById('barLanguage'),
 };
 
 // Set to true only while developing locally — keeps customer context/history
@@ -52,6 +52,51 @@ let history = [];
 let threads = [];
 let activeThreadId = null;
 let ttsQueue = [];
+
+const LANGUAGE_ROUTING = {
+  auto: {
+    label: 'Auto-detect',
+    sttModel: 'openai/whisper-large-v3-turbo',
+    provider: 'Auto'
+  },
+  en: {
+    label: 'English',
+    sttModel: 'nvidia/nemotron-speech-streaming-en-0.6b',
+    llmModel: 'Qwen/Qwen3.5-27B',
+    provider: 'NVIDIA + Qwen'
+  },
+  ta: { label: 'Tamil', provider: 'Hugging Face' },
+  hi: { label: 'Hindi', provider: 'Hugging Face' }
+};
+
+function getSelectedLanguage(){
+  return els.barLanguage ? els.barLanguage.value : 'en';
+}
+
+function getLanguageRouting(){
+  const language = getSelectedLanguage();
+  const route = LANGUAGE_ROUTING[language] || LANGUAGE_ROUTING.en;
+  return {
+    language,
+    sttModel: route.sttModel || els.sttModel.value,
+    llmModel: route.llmModel || els.llmModel.value,
+    provider: route.provider
+  };
+}
+
+function syncLanguageRouting(){
+  const route = getLanguageRouting();
+  // Sync the STT model dropdown in settings to match the selected language's route
+  if(route.sttModel && els.sttModel) els.sttModel.value = route.sttModel;
+  if(route.llmModel) els.llmModel.value = route.llmModel;
+  if(els.statusPill) els.statusPill.textContent = route.provider;
+  if(els.inputStatus && !busy) setStatus('Type a message, or click the mic to speak');
+}
+
+if(els.barLanguage){
+  els.barLanguage.addEventListener('change', syncLanguageRouting);
+  syncLanguageRouting();
+}
 
 // ============================================================
 // JIO CUSTOMER SUPPORT CONFIGURATION
@@ -492,7 +537,7 @@ function updateCustomerContext(userText) {
   // auto-detection — it's the escape hatch for when transcription mangles
   // Tamil/Hindi speech into English text and detectLanguage() would
   // otherwise be fooled into thinking the customer is speaking English.
-  const manualLanguage = { en: "English", hi: "Hindi", ta: "Tamil" }[els.convLanguage.value];
+  const manualLanguage = getSelectedLanguage() !== 'auto' ? { en: "English", hi: "Hindi", ta: "Tamil" }[getSelectedLanguage()] : null;
   const detectedLanguage = manualLanguage || detectLanguage(text);
   if (detectedLanguage) customerContext.language = detectedLanguage;
 
@@ -683,12 +728,26 @@ const LANGUAGE_TO_VOICE_TAGS = {
 function voiceNaturalness(v){
   const name = (v.name || '').toLowerCase();
   let score = 0;
-  if(/natural|neural|premium|enhanced|wavenet|online|studio/.test(name)) score += 3;
-  if(/google/.test(name)) score += 2;
-  if(v.localService === false) score += 1; // network voice — usually higher quality
-  if(/compact|espeak|robotic/.test(name)) score -= 3;
+  if(/natural|neural|premium|enhanced|wavenet|online|studio/.test(name)) score += 5;
+  if(/google/.test(name)) score += 3;
+  if(/microsoft/.test(name)) score += 2;
+  if(/samantha|karen|daniel|moira|tessa|fiona|alex/.test(name)) score += 2;
+  if(v.localService === false) score += 2; // network voice — usually higher quality
+  if(v.default) score += 1;
+  if(/compact|espeak|robotic|festival|flite/.test(name)) score -= 5;
+  if(/xp|vista|7|old|legacy/.test(name)) score -= 3;
   return score;
 }
+
+// Natural speech settings per language — tuned to sound more like a native
+// speaker instead of a flat robot. Rate 0.9-0.95 feels conversational;
+// pitch 1.05-1.1 adds warmth without sounding cartoonish.
+const NATURAL_SPEECH_SETTINGS = {
+  'en': { rate: 0.92, pitch: 1.05 },
+  'hi': { rate: 0.95, pitch: 1.08 },
+  'ta': { rate: 0.95, pitch: 1.08 },
+  'auto': { rate: 0.92, pitch: 1.05 },
+};
 
 // Finds the best installed voice for a detected language hint. Returns
 // null if nothing matches, so the caller can fall back to whatever the
@@ -777,8 +836,18 @@ function playNextInQueue(){
     const idx = Number(selection);
     if(voices[idx]) utter.voice = voices[idx];
   }
-  utter.rate = Number(els.ttsRate.value);
-  utter.pitch = Number(els.ttsPitch.value);
+  // Use natural speech settings when auto mode is selected, otherwise
+  // respect the user's manual rate/pitch slider values.
+  const lang = customerContext.language || 'en';
+  const langCode = lang.includes('Hindi') ? 'hi' : lang.includes('Tamil') ? 'ta' : 'en';
+  if(selection === 'auto'){
+    const natural = NATURAL_SPEECH_SETTINGS[langCode] || NATURAL_SPEECH_SETTINGS.auto;
+    utter.rate = natural.rate;
+    utter.pitch = natural.pitch;
+  } else {
+    utter.rate = Number(els.ttsRate.value);
+    utter.pitch = Number(els.ttsPitch.value);
+  }
   utter.onend = playNextInQueue;
   utter.onerror = playNextInQueue;
   window.speechSynthesis.speak(utter);
@@ -798,8 +867,13 @@ function extractCompleteSentences(fullText, alreadySpokenLength){
   const consumed = matches.join('');
   return { sentences: matches.map(s => s.trim()).filter(Boolean), newSpokenLength: alreadySpokenLength + consumed.length };
 }
-els.stopSpeakBtn.addEventListener('click', stopSpeaking);
 document.getElementById('stopSpeakBtnInline').addEventListener('click', stopSpeaking);
+if(els.closeSidebarBtn){
+  els.closeSidebarBtn.addEventListener('click', () => {
+    els.sidebar.classList.add('collapsed');
+    els.sidebarOverlay.classList.remove('visible');
+  });
+}
 
 // === Status ===
 function setStatus(msg, kind){
@@ -1020,9 +1094,10 @@ function blobToBase64(blob){
 
 async function transcribeAudio(blob){
   const token = els.token.value.trim();
-  const model = els.sttModel.value;
+  const route = getLanguageRouting();
+  const model = route.sttModel;
   const url = 'https://router.huggingface.co/hf-inference/models/' + model;
-  const langCode = els.convLanguage.value; // 'auto' | 'en' | 'hi' | 'ta'
+  const langCode = route.language;
 
   // Whisper checkpoints are multilingual and, if left to guess, sometimes
   // default to (or get nudged toward) the "translate" task — which turns
@@ -1073,7 +1148,7 @@ async function transcribeAudio(blob){
 // responsive in a voice pipeline instead of going silent for several seconds.
 async function askLLM(messages, onDelta){
   const token = els.token.value.trim();
-  const model = els.llmModel.value;
+  const model = getLanguageRouting().llmModel;
 
   const systemMessage = {
     role: 'system',
@@ -1839,21 +1914,17 @@ els.micBtn.addEventListener('click', () => {
   recording ? stopRecording() : startRecording();
 });
 
-// === Atelier view modes: input panel lives in the landing, docks to the bottom while chatting ===
+// === Atelier view modes: input panel is always fixed at the bottom ===
 function enterChatMode(){
   const content = document.querySelector('.content');
   if(!content || !els.inputBar) return;
   if(els.inputBar.parentElement !== content){
     content.appendChild(els.inputBar);
   }
-  els.inputBar.classList.add('fixed-bottom');
 }
 function exitChatMode(){
   if(!els.inputBar || !els.emptyState) return;
-  if(els.inputBar.parentElement !== els.emptyState){
-    els.emptyState.appendChild(els.inputBar);
-  }
-  els.inputBar.classList.remove('fixed-bottom');
+  // Input panel stays fixed at the bottom — no mode switching needed
 }
 
 // === Remember-token opt-in (off by default; explicit user consent required) ===
